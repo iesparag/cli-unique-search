@@ -7,20 +7,26 @@ import { test } from 'node:test';
 import { search } from '../lib/searcher.js';
 
 // Helper: create tmp test files/dirs with content, return {dirPath, filePaths: [abs]}
-async function setupFilestructure(filesMap) {
+async function setupFilestructure(filesMap, binaryFiles = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cus-test-'));
   const absPaths = [];
-  // filesMap: {"sub/file.txt": "content"}
+  // filesMap: {'sub/file.txt': 'content'}
   for (const [rel, content] of Object.entries(filesMap)) {
     const abs = path.join(tmpDir, rel);
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, 'utf8');
     absPaths.push(abs);
   }
+  // binaryFiles: {'file.bin': Uint8Array}
+  for (const [rel, buffer] of Object.entries(binaryFiles)) {
+    const abs = path.join(tmpDir, rel);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, buffer);
+    absPaths.push(abs);
+  }
   return { dirPath: tmpDir, filePaths: absPaths };
 }
 
-// Helper: recursive rm tmpdir
 async function cleanup(dir) {
   await fs.rm(dir, { recursive: true, force: true });
 }
@@ -67,9 +73,7 @@ test('searcher.js: respects the ignoreCase option', async (t) => {
   });
   try {
     let res = await search({ query: 'foobar', path: filePaths[0] });
-    // Case sensitive default: match none
     assert.strictEqual(res.length, 0);
-    // Now ignoreCase=true: should match lines 1 and 2
     res = await search({ query: 'foobar', path: filePaths[0], ignoreCase: true });
     assert.strictEqual(res.length, 2);
     assert.deepStrictEqual(res.map(r => r.lineNumber), [1, 2]);
@@ -84,10 +88,8 @@ test('searcher.js: limits results with maxResults', async (t) => {
     'm2.txt': 'foo\nfoo\nfoo',
   });
   try {
-    // There are 7 foo's; limit to max 3
     const results = await search({ query: 'foo', path: dirPath, maxResults: 3 });
     assert.strictEqual(results.length, 3);
-    // Results must be in order: m.txt lines 2/3/4
     assert.deepStrictEqual(results[0].filePath.endsWith('m.txt'), true);
     assert.strictEqual(results[0].lineNumber, 2);
   } finally {
@@ -103,13 +105,63 @@ test('searcher.js: filters files using filePattern', async (t) => {
     'docs/z.md': 'match',
   });
   try {
-    // Only search *.md
     const results = await search({ query: 'match', path: dirPath, filePattern: '*.md' });
     assert.deepStrictEqual(
       results.map(r => path.basename(r.filePath)).sort(),
       ['x.md', 'z.md']
     );
   } finally {
+    await cleanup(dirPath);
+  }
+});
+
+test('searcher.js: skips binary files and outputs warning', async (t) => {
+  const binContent = Buffer.from([0, 159, 146, 150, 0, 33, 42]);
+  const { dirPath } = await setupFilestructure({
+    'text.txt': 'match\nhere',
+    'other.txt': 'irrelevant',
+    'ignore.me': 'nothing',
+  }, {'bin.dat': binContent});
+  try {
+    let messages = '';
+    const origStderr = process.stderr.write;
+    process.stderr.write = (chunk) => { messages += chunk; return true; };
+
+    const results = await search({ query: 'match', path: dirPath });
+    process.stderr.write = origStderr;
+
+    assert(results.some(r => path.basename(r.filePath) === 'text.txt'));
+    assert(results.every(r => path.basename(r.filePath) !== 'bin.dat'));
+    assert(messages.includes('Skipped binary file'));
+    assert(messages.includes('bin.dat'));
+  } finally {
+    await cleanup(dirPath);
+  }
+});
+
+test('searcher.js: handles invalid path error', async (t) => {
+  let error = null;
+  try {
+    await search({ query: 'foo', path: '/does-not-exist-xxx' });
+  } catch (err) {
+    error = err;
+  }
+  assert(error instanceof Error);
+  assert(error.message.includes('not found'));
+});
+
+test('searcher.js: handles invalid glob pattern', async (t) => {
+  const { dirPath } = await setupFilestructure({ 'a.txt': 'foo' });
+  try {
+    let error = null;
+    try {
+      await search({ query: 'foo', path: dirPath, filePattern: '[[' });
+    } catch (err) {
+      error = err;
+    }
+    assert(error instanceof Error);
+    assert(error.message.toLowerCase().includes('glob pattern'));
+  } finally{
     await cleanup(dirPath);
   }
 });
