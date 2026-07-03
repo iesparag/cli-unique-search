@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import process from 'process';
 import { search } from '../lib/searcher.js';
 import { filterUnique } from '../lib/uniqueness.js';
+import { formatResults, formatError, formatInfo } from '../lib/formatter.js';
 
 const USAGE = `\ncli-unique-search\nA unique, configurable CLI text search tool.\n\nUsage:\n  unique-search --query <search string> --path <directory or file> [options]\n\nOptions:\n  --query         REQUIRED: Text to search for\n  --path          REQUIRED: Directory or file path to search [default: .]\n  --ignore-case   Case-insensitive search (default: off)\n  --file-pattern  Glob pattern to filter files [default: '*.*']\n  --max-results   Maximum number of results to return (positive integer)\n  --unique-key    Uniqueness mode: 'line' (by line), or 'fileLine' (by file+line) [default: line]\n  --help          Show this help message\n\nExamples:\n  unique-search --query "hello" --path ./docs --ignore-case\n  unique-search --query foo --path ./src --file-pattern '*.js' --max-results 5\n`;
 
@@ -47,7 +48,7 @@ function parseAndValidateArgs(argv) {
     },
     unknown: (arg) => {
       if (arg.startsWith("-")) {
-        process.stderr.write(`Unknown option: ${arg}\n`);
+        process.stderr.write(formatError(`Unknown option: ${arg}\n`));
         printUsage();
         process.exit(1);
         return false;
@@ -62,14 +63,14 @@ function parseAndValidateArgs(argv) {
   }
 
   if (!args.query || typeof args.query !== "string" || args.query.trim() === "") {
-    process.stderr.write("\nError: --query is required and must be a non-empty string.\n");
+    process.stderr.write(formatError("\nError: --query is required and must be a non-empty string.\n"));
     printUsage();
     process.exit(1);
   }
 
   let searchPath = args.path;
   if (typeof searchPath !== "string" || searchPath.trim() === "") {
-    process.stderr.write("\nError: --path is required and must be a non-empty string.\n");
+    process.stderr.write(formatError("\nError: --path is required and must be a non-empty string.\n"));
     printUsage();
     process.exit(1);
   }
@@ -78,7 +79,7 @@ function parseAndValidateArgs(argv) {
   // Unique-key validation
   let uniqueKey = args["unique-key"];
   if (!UNIQUE_KEYS.includes(uniqueKey)) {
-    process.stderr.write(`\nError: --unique-key must be one of: ${UNIQUE_KEYS.join(', ')}\n`);
+    process.stderr.write(formatError(`\nError: --unique-key must be one of: ${UNIQUE_KEYS.join(', ')}\n`));
     printUsage();
     process.exit(1);
   }
@@ -89,12 +90,12 @@ function parseAndValidateArgs(argv) {
   // file-pattern
   let filePattern = args["file-pattern"];
   if (typeof filePattern !== "string" || filePattern.trim() === "") {
-    process.stderr.write(`\nError: --file-pattern must be a non-empty string.\n`);
+    process.stderr.write(formatError(`\nError: --file-pattern must be a non-empty string.\n`));
     printUsage();
     process.exit(1);
   }
   if (!isValidGlobPattern(filePattern)) {
-    process.stderr.write(`\nError: --file-pattern '${filePattern}' is not a valid glob pattern.\n`);
+    process.stderr.write(formatError(`\nError: --file-pattern '${filePattern}' is not a valid glob pattern.\n`));
     printUsage();
     process.exit(1);
   }
@@ -105,7 +106,7 @@ function parseAndValidateArgs(argv) {
     const raw = args["max-results"];
     const val = typeof raw === 'number' ? raw : Number.parseInt(raw, 10);
     if (!Number.isInteger(val) || val <= 0) {
-      process.stderr.write(`\nError: --max-results must be a positive integer.\n`);
+      process.stderr.write(formatError(`\nError: --max-results must be a positive integer.\n`));
       printUsage();
       process.exit(1);
     }
@@ -122,29 +123,16 @@ function parseAndValidateArgs(argv) {
   };
 }
 
-// Simple formatter for terminal output
-function formatResults(results) {
-  if (!Array.isArray(results) || results.length === 0) return 'No results found.';
-  return results
-    .map(
-      r => `${r.filePath}:${r.lineNumber}: ${r.lineContent}`
-    )
-    .join('\n');
-}
-
 // Main
 if (import.meta.url === `file://${process.argv[1]}`) {
   (async () => {
     try {
       const { query, path, uniqueKey, ignoreCase, filePattern, maxResults } = parseAndValidateArgs(process.argv);
-      // Search files for matches
       const rawResults = await search({ query, path, ignoreCase, filePattern, maxResults });
-      // Uniqueness filter
       const filteredResults = filterUnique(rawResults, uniqueKey);
-      // Output
-      process.stdout.write(formatResults(filteredResults) + '\n');
+      process.stdout.write(formatResults(filteredResults, query, { ignoreCase }) + '\n');
     } catch (err) {
-      process.stderr.write(`Unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(formatError(`Unexpected error: ${err instanceof Error ? err.message : String(err)}\n`));
       process.exit(1);
     }
   })();
