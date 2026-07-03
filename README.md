@@ -13,6 +13,7 @@ A unique, configurable CLI tool for text search, letting you scan directories or
   - Limit max results (`--max-results`)
   - Uniqueness control (`--unique-key`)
 - **Colorful and readable terminal output!**
+- Skips binary files automatically with a warning; handles invalid paths and glob patterns gracefully
 - Meaningful input validation & helpful error messages
 - Friendly usage and help output
 
@@ -93,6 +94,10 @@ Options:
   --unique-key    Uniqueness mode: 'line' (by line), or 'fileLine' (by file+line) [default: line]
   --help          Show this help message
 
+Notes:
+  - Binary files are automatically skipped with a warning.
+  - Invalid glob patterns or unreadable paths produce informative errors.
+
 Examples:
   unique-search --query "hello" --path ./docs --ignore-case
   unique-search --query foo --path ./src --file-pattern '*.js' --max-results 5
@@ -129,6 +134,19 @@ Below are examples of how the CLI output appears in the terminal with color form
 ```
 
 - Error messages are shown in red for maximum visibility.
+- When binary files are skipped, a yellow info message is printed:
+
+```
+[33mSkipped binary file: ./bin/file.bin[0m
+```
+
+---
+
+## Robustness & Error Handling
+
+- Binary files (detected by sampling for null/non-ASCII bytes) are **skipped** automatically and a warning is issued in CLI output.
+- **Large files** are streamed line-by-line; tool never loads the full file into memory.
+- Invalid paths, unreadable files, and invalid glob patterns produce clear error messages and cause the program to exit with a non-zero code.
 
 ---
 
@@ -145,7 +163,7 @@ npm test
 ## Project Structure
 
 - `bin/cli.js` – Main CLI entry, argument parsing, validation, and runs search/unique logic
-- `lib/searcher.js` – File traversal and matching logic with new options
+- `lib/searcher.js` – File traversal and matching logic (skips binaries, large files streamed, robust input)
 - `lib/uniqueness.js` – Filter unique results per chosen uniqueness key
 - `lib/formatter.js` – Output formatting with colors and messages
 - `test/` – Automated tests
