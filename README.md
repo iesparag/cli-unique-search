@@ -12,6 +12,7 @@ A unique, configurable CLI tool for text search, letting you scan directories or
   - File pattern glob filtering (`--file-pattern`)
   - Limit max results (`--max-results`)
   - Uniqueness control (`--unique-key`)
+- **Colorful and readable terminal output!**
 - Meaningful input validation & helpful error messages
 - Friendly usage and help output
 
@@ -99,6 +100,38 @@ Examples:
 
 ---
 
+## Colorful Output Demo
+
+Below are examples of how the CLI output appears in the terminal with color formatting:
+
+### Example: Result Output
+
+```
+[36msrc/utils.js:12[0m: Some line with [43m[1mfoo[0m in it
+[36mlib/formatter.js:3[0m: Highlight [43m[1mfoo[0m and [43m[1mfoo[0m again
+```
+
+- **Filepath:lineNumber** is shown in cyan
+- **Matching words** are shown with yellow background and bold.
+
+### Example: No Results
+
+```
+[33mNo results found for query "missingWord"[0m
+```
+
+- Informational or no-results messages appear in yellow.
+
+### Example: Error Message
+
+```
+[31mError: Path not found or unreadable: ./doesNotExist[0m
+```
+
+- Error messages are shown in red for maximum visibility.
+
+---
+
 ## Scripts
 
 - **npm test** – Runs parsing & validation tests for CLI arguments and search functionality
@@ -114,6 +147,7 @@ npm test
 - `bin/cli.js` – Main CLI entry, argument parsing, validation, and runs search/unique logic
 - `lib/searcher.js` – File traversal and matching logic with new options
 - `lib/uniqueness.js` – Filter unique results per chosen uniqueness key
+- `lib/formatter.js` – Output formatting with colors and messages
 - `test/` – Automated tests
 - `.env.example` – template for any future environment variables
 
