@@ -1,92 +1,62 @@
 # cli-unique-search
 
-A unique, configurable CLI tool for text search, letting you scan directories or files for matches, filter for unique lines or locations, and see readable, useful output in your terminal.
+A unique, configurable CLI tool for text search that scans local files or directories, filtering unique matches by line or file+line location. Flexible options allow matching file patterns, case-insensitive search, and limiting result counts. Output is readable, colorized, and designed for terminal use.
 
 ---
 
 ## Features
 
-- Easy CLI: Search a string across files/directories
-- Flexible options:
-  - Case sensitivity (`--ignore-case`)
-  - File pattern glob filtering (`--file-pattern`)
-  - Limit max results (`--max-results`)
-  - Uniqueness control (`--unique-key`)
-- **Colorful and readable terminal output!**
-- Skips binary files automatically with a warning; handles invalid paths and glob patterns gracefully
-- Meaningful input validation & helpful error messages
-- Friendly usage and help output
+- **Efficient, local CLI search** across one file, many files, or entire directory trees
+- **Uniqueness filtering**: by unique line content or unique file+line location
+- **Glob file pattern matching**: search only certain types of files
+- **Case-insensitive matching** (`--ignore-case`)
+- **Limit maximum results** for faster scans on large codebases
+- **Great terminal output**: colorized results and clear error/warning/info messages
+- **Skips binary files** automatically with a warning
+- **Robust input validation** and helpful usage/errors
+- **Works on Windows, Mac, Linux; Node 18+; no noisy dependencies**
 
 ---
 
-## Getting Started
+## Installation
 
-### 1. Install dependencies
+### Local project usage
+
+Clone or download this repository, then run:
 
 ```
 npm install
 ```
 
-### 2. Run via CLI
-
-You can run the tool with:
+You can then run the CLI as:
 
 ```
-node ./bin/cli.js --query "search word" --path ./some-folder
+node ./bin/cli.js --query "my search" --path ./some-folder
 ```
 
-Or (for global use):
+### System-wide (global) usage
+
+Install globally from the root of this repo:
 
 ```
 npm install -g .
-unique-search --query "search word" --path ./some-folder
 ```
 
-### 3. Example Usage
-
-#### Case-insensitive search
+This globally exposes the `unique-search` command:
 
 ```
-unique-search --query TODO --path ./src --ignore-case
-```
-_Search for "TODO" in all files in ./src, matching all case variations._
-
-#### Filter by file type
-
-```
-unique-search --query "fixme" --file-pattern "*.js" --path ./lib
-```
-_Search only in .js files in lib/ for "fixme"._
-
-#### Limit maximum results returned
-
-```
-unique-search --query "error" --path ./logs --max-results 5
-```
-_Only the first 5 matching lines will be shown._
-
-#### Uniqueness option (by file+line)
-
-```
-unique-search --query "foo" --unique-key fileLine --path ./docs
-```
-_Filter unique matches by file and line number._
-
-#### Multiple options
-
-```
-unique-search --query warning --ignore-case --file-pattern "*.log" --max-results 10 --path ./my-logs
+unique-search --query "something" --path ./src
 ```
 
 ---
 
-## CLI Usage
+## Full CLI Usage
 
 ```
 unique-search --query <search string> --path <file or dir> [options]
 
 Options:
-  --query         REQUIRED: Text to search for
+  --query         REQUIRED: Text to search for (non-empty string)
   --path          REQUIRED: Directory or file path to search [default: .]
   --ignore-case   Case-insensitive search (default: off)
   --file-pattern  Glob pattern to filter files [default: '*.*']
@@ -95,87 +65,229 @@ Options:
   --help          Show this help message
 
 Notes:
-  - Binary files are automatically skipped with a warning.
-  - Invalid glob patterns or unreadable paths produce informative errors.
+- Binary files are automatically skipped with a warning.
+- Invalid glob patterns or unreadable paths produce informative errors.
+- Result lines are colorized by file and by matched query for easy scanning.
+- The CLI exits with non-zero codes on errors.
 
 Examples:
-  unique-search --query "hello" --path ./docs --ignore-case
-  unique-search --query foo --path ./src --file-pattern '*.js' --max-results 5
+
+# Search for 'todo' in all files in ./src, case-insensitive
+unique-search --query "todo" --path ./src --ignore-case
+
+# Search only in .js files
+unique-search --query "fixme" --file-pattern "*.js" --path ./lib
+
+# Limit results to first 5 unique lines
+unique-search --query "err" --path ./logs --max-results 5
+
+# Uniqueness by file+line (not just line content)
+unique-search --query "foo" --unique-key fileLine --path ./docs
+
+# All options at once
+unique-search --query warning --ignore-case --file-pattern "*.log" --max-results 10 --path ./my-logs
+
+---
+
+## Uniqueness Modes Explained
+
+- **--unique-key line (default):**
+  - Each unique line content appears once, no matter which file it is found in or on what line.
+  - Use if you want to de-duplicate by line, even if that line appears in multiple places.
+
+- **--unique-key fileLine:**
+  - Each unique occurrence by file _and_ line number is included, i.e., matching the same line content in two files or on two lines counts as different results.
+  - Use if you want to see ALL places a line appears (including duplicates).
+
+---
+
+## Output Examples
+
+### Colorful Results
+
+```
+[36msrc/utils.js:12[0m: Line with [43m[1mfoo[0m example
+[36mlib/core.js:27[0m: Another [43m[1mfoo[0m instance
+```
+
+- **Filepath:line** is cyan
+- **Query** is yellow with bold
+- No results:
+
+```
+[33mNo results found for query "gibberish"[0m
+```
+
+- Skipped binary files:
+
+```
+[33mSkipped binary file: ./bin/image.dat[0m
+```
+
+- Errors:
+
+```
+[31mError: Path not found or unreadable: ./notapath[0m
 ```
 
 ---
 
-## Colorful Output Demo
+## Error Messages & Troubleshooting
 
-Below are examples of how the CLI output appears in the terminal with color formatting:
+- **Missing required --query**:
+  - Error: `--query is required and must be a non-empty string.`
+- **Path not found or unreadable**:
+  - Error: `Path not found or unreadable: <your-path>`
+- **Invalid glob pattern**:
+  - Error: `Invalid glob pattern: <your-pattern>`
+- **Unsupported or unknown CLI option**:
+  - Error: `Unknown option: --badoption`
+- **Empty file pattern or unique key**:
+  - Error: `--file-pattern must be a non-empty string.`
+  - Error: `--unique-key must be one of: line, fileLine`
+- **Max results not a positive integer**:
+  - Error: `--max-results must be a positive integer.`
 
-### Example: Result Output
+### Troubleshooting
+
+- **No results**: Check your spelling, file pattern, and case-sensitivity
+- **Binary file skipped**: The tool skips files that appear to be non-text
+- **Permission errors**: Make sure you have read access to the searched directory
+- **Invalid options**: Double-check usage and try `--help` for guidance
+- **File pattern filtering off on single file**: Only files matching the glob are searched, even when pointing to a single file
+
+---
+
+## Environment Variables Support
+
+This tool does not require any environment variables for normal usage.
+- You may future-proof global defaults using a `.env` or environment variables if required. See `.env.example` for a template.
+
+Set e.g. `DEFAULT_PATH` (not used by default, but code is structured to allow env var overrides in the future):
 
 ```
-[36msrc/utils.js:12[0m: Some line with [43m[1mfoo[0m in it
-[36mlib/formatter.js:3[0m: Highlight [43m[1mfoo[0m and [43m[1mfoo[0m again
-```
-
-- **Filepath:lineNumber** is shown in cyan
-- **Matching words** are shown with yellow background and bold.
-
-### Example: No Results
-
-```
-[33mNo results found for query "missingWord"[0m
-```
-
-- Informational or no-results messages appear in yellow.
-
-### Example: Error Message
-
-```
-[31mError: Path not found or unreadable: ./doesNotExist[0m
-```
-
-- Error messages are shown in red for maximum visibility.
-- When binary files are skipped, a yellow info message is printed:
-
-```
-[33mSkipped binary file: ./bin/file.bin[0m
+DEFAULT_PATH=~/my/code
 ```
 
 ---
 
-## Robustness & Error Handling
+## Development & Contribution Guidelines
 
-- Binary files (detected by sampling for null/non-ASCII bytes) are **skipped** automatically and a warning is issued in CLI output.
-- **Large files** are streamed line-by-line; tool never loads the full file into memory.
-- Invalid paths, unreadable files, and invalid glob patterns produce clear error messages and cause the program to exit with a non-zero code.
+1. Fork and clone this repo.
+2. Run `npm install` to get dependencies.
+3. Add new features or fix bugs in `lib/` or `bin/`.
+4. Write tests in `test/` for new functionality.
+5. Try `npm test` to verify correctness (requires Node 18+).
+6. Submit a pull request with details and test output.
 
 ---
 
-## Scripts
+## Testing
 
-- **npm test** – Runs parsing & validation tests for CLI arguments and search functionality
+Run the full test suite:
 
 ```
 npm test
 ```
 
+Tests cover searcher logic, uniqueness options, error handling, and formatting.
+
 ---
 
-## Project Structure
+## Publishing (npm)
 
-- `bin/cli.js` – Main CLI entry, argument parsing, validation, and runs search/unique logic
-- `lib/searcher.js` – File traversal and matching logic (skips binaries, large files streamed, robust input)
-- `lib/uniqueness.js` – Filter unique results per chosen uniqueness key
-- `lib/formatter.js` – Output formatting with colors and messages
-- `test/` – Automated tests
-- `.env.example` – template for any future environment variables
+This CLI is ready for public npm deployment!
+
+- **Ensure the following before publishing:**
+  - Update your `package.json` with a new version number (Semantic Versioning: major.minor.patch)
+  - Add/change keywords as needed in `package.json` for discoverability ([see below](#keywords))
+  - Run all tests: `npm test` (should pass; see output)
+
+**To publish:**
+
+1. Login to npm: `npm login`
+2. Publish: `npm publish --access public`
+
+**After publish:** The CLI will be installable as `npm install -g cli-unique-search`.
+
+### Versioning
+- Use [SemVer](https://semver.org/) for releases, e.g., bump 0.1.0 → 0.1.1 for bugfixes.
+- If adding new CLI options or breaking changes, bump minor/major version accordingly.
+
+### Keywords
+Add or update keywords in `package.json` to:
+- `cli`
+- `search`
+- `text search`
+- `deduplicate`
+- `grep`
+- `unique`
+- `glob`
+- `terminal`
+- `filesystem search`
+
+Example:
+
+```json
+"keywords": [
+  "cli",
+  "search",
+  "text search",
+  "deduplicate",
+  "grep",
+  "unique",
+  "glob",
+  "terminal",
+  "filesystem search"
+]
+```
 
 ---
 
 ## Deployment
 
-Backend-only CLI tool. No frontend.
+Backend-only CLI tool (runs locally). No frontend.
 
 ---
 
-## License
-MIT
+## One-click Deployment Buttons
+
+Since this is a CLI tool (not web/HTTP), deployment is not to Railway/Vercel in the usual sense, but for documentation completeness:
+
+### Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
+
+**How to use:**
+- Click the button above
+- Select the repo: https://github.com/iesparag/cli-unique-search
+- Set backend root directory to `backend/` if ever converted to a backend server (future scope)
+- (No required env vars at this time. See `.env.example`.)
+
+### Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/iesparag/cli-unique-search&root-directory=frontend)
+
+- Currently not applicable for this CLI tool. Provided for completeness for future frontend extensions.
+
+---
+
+## Project Structure
+
+```
+cli-unique-search/
+  bin/cli.js           # CLI entrypoint: argument parsing, program flow
+  lib/searcher.js      # Core search logic
+  lib/uniqueness.js    # Uniqueness filtering
+  lib/formatter.js     # Output formatting
+  test/                # Comprehensive tests (unit + integration)
+  .env.example         # (Optional config example)
+  package.json         # NPM metadata + scripts
+  README.md            # This file
+```
+
+---
+
+## Author and License
+
+By [iesparag](https://github.com/iesparag). Licensed under the MIT license.

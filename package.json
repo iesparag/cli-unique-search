@@ -12,6 +12,17 @@
   },
   "author": "iesparag",
   "license": "MIT",
+  "keywords": [
+    "cli",
+    "search",
+    "text search",
+    "deduplicate",
+    "grep",
+    "unique",
+    "glob",
+    "terminal",
+    "filesystem search"
+  ],
   "dependencies": {
     "minimist": "^1.2.8",
     "glob": "^10.3.10"
