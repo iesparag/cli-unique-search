@@ -6,36 +6,19 @@ import { search } from '../lib/searcher.js';
 import { filterUnique } from '../lib/uniqueness.js';
 import { formatResults, formatError, formatInfo } from '../lib/formatter.js';
 
-const USAGE = `\ncli-unique-search\nA unique, configurable CLI text search tool.\n\nUsage:\n  unique-search --query <search string> --path <directory or file> [options]\n\nOptions:\n  --query         REQUIRED: Text to search for\n  --path          REQUIRED: Directory or file path to search [default: .]\n  --ignore-case   Case-insensitive search (default: off)\n  --file-pattern  Glob pattern to filter files [default: '*.*']\n  --max-results   Maximum number of results to return (positive integer)\n  --unique-key    Uniqueness mode: 'line' (by line), or 'fileLine' (by file+line) [default: line]\n  --help          Show this help message\n\nExamples:\n  unique-search --query "hello" --path ./docs --ignore-case\n  unique-search --query foo --path ./src --file-pattern '*.js' --max-results 5\n`;
+const USAGE = `\ncli-unique-search\nA unique, configurable CLI text search tool.\n\nUsage:\n  unique-search --query <search string> --path <directory or file> [options]\n\nOptions:\n  --query         REQUIRED: Text to search for\n  --path          REQUIRED: Directory or file path to search [default: .]\n  --ignore-case   Case-insensitive search (default: off)\n  --file-pattern  Glob pattern to filter files [default: '*.*']\n  --max-results   Maximum number of results to return (positive integer)\n  --unique-key    Uniqueness mode: 'line' (by line), or 'fileLine' (by file+line) [default: line]\n  --help          Show this help message\n\nNotes:\n  - Binary files are automatically skipped with a warning.\n  - Invalid glob patterns or unreadable paths produce informative errors.\n\nExamples:\n  unique-search --query "hello" --path ./docs --ignore-case\n  unique-search --query foo --path ./src --file-pattern '*.js' --max-results 5\n`;
 
 const UNIQUE_KEYS = ["line", "fileLine"];
 
-/**
- * Prints usage help to stderr
- */
 function printUsage() {
   process.stderr.write(USAGE);
 }
 
-/**
- * Validate glob pattern syntax via glob.hasMagic or a simple test.
- */
 function isValidGlobPattern(pattern) {
-  // Accept string with at most typical glob tokens: *, ?, [], {}, etc.
   if (typeof pattern !== 'string' || pattern.trim() === '') return false;
-  // Basic attempt: forbid bad non-string or weird patterns (very loose)
-  try {
-    // Try to see if glob synchronously matches something; don't care if matches empty.
-    // We do not check whether any file actually matches, only pattern-parseability.
-    return true;
-  } catch {
-    return false;
-  }
+  return true;
 }
 
-/**
- * Validate CLI arguments. Returns opts for search and uniqueness, or prints error and exits.
- */
 function parseAndValidateArgs(argv) {
   const args = minimist(argv.slice(2), {
     string: ["query", "path", "unique-key", "file-pattern", "max-results"],
@@ -76,7 +59,6 @@ function parseAndValidateArgs(argv) {
   }
   searchPath = resolve(searchPath);
 
-  // Unique-key validation
   let uniqueKey = args["unique-key"];
   if (!UNIQUE_KEYS.includes(uniqueKey)) {
     process.stderr.write(formatError(`\nError: --unique-key must be one of: ${UNIQUE_KEYS.join(', ')}\n`));
@@ -84,10 +66,8 @@ function parseAndValidateArgs(argv) {
     process.exit(1);
   }
 
-  // ignore-case
   const ignoreCase = Boolean(args["ignore-case"]);
 
-  // file-pattern
   let filePattern = args["file-pattern"];
   if (typeof filePattern !== "string" || filePattern.trim() === "") {
     process.stderr.write(formatError(`\nError: --file-pattern must be a non-empty string.\n`));
@@ -100,7 +80,6 @@ function parseAndValidateArgs(argv) {
     process.exit(1);
   }
 
-  // max-results: Parse or undefined
   let maxResults = undefined;
   if (args["max-results"] !== undefined) {
     const raw = args["max-results"];
@@ -123,12 +102,24 @@ function parseAndValidateArgs(argv) {
   };
 }
 
-// Main
 if (import.meta.url === `file://${process.argv[1]}`) {
   (async () => {
     try {
       const { query, path, uniqueKey, ignoreCase, filePattern, maxResults } = parseAndValidateArgs(process.argv);
-      const rawResults = await search({ query, path, ignoreCase, filePattern, maxResults });
+      let rawResults;
+      try {
+        rawResults = await search({ query, path, ignoreCase, filePattern, maxResults });
+      } catch (err) {
+        if (err.message && err.message.includes('Invalid glob pattern')) {
+          process.stderr.write(formatError(`Error: ${err.message}\n`));
+          process.exit(1);
+        }
+        if (err.message && err.message.startsWith('Path not found')) {
+          process.stderr.write(formatError(`Error: ${err.message}\n`));
+          process.exit(1);
+        }
+        throw err;
+      }
       const filteredResults = filterUnique(rawResults, uniqueKey);
       process.stdout.write(formatResults(filteredResults, query, { ignoreCase }) + '\n');
     } catch (err) {
@@ -138,10 +129,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   })();
 }
 
-// Minimal test for CLI parser with new options (run by 'npm test')
 if (process.env.NODE_ENV === "test" || process.env.TEST_CLI_UNIQUE_SEARCH === "1") {
   import('node:assert').then(({ default: assert }) => {
-    // Test valid parse
     const args = ["node", "cli.js", "--query", "hello", "--path", "./test-path", "--ignore-case", "--file-pattern", "*.md", "--unique-key", "fileLine", "--max-results", "5"];
     const opts = parseAndValidateArgs(args);
     assert.strictEqual(opts.query, "hello");
@@ -150,14 +139,11 @@ if (process.env.NODE_ENV === "test" || process.env.TEST_CLI_UNIQUE_SEARCH === "1
     assert.strictEqual(opts.ignoreCase, true);
     assert.strictEqual(opts.filePattern, "*.md");
     assert.strictEqual(opts.maxResults, 5);
-    // Test default file-pattern
     const opts2 = parseAndValidateArgs(["node", "cli.js", "--query", "foo"]);
     assert.strictEqual(opts2.filePattern, "*.*");
     assert.strictEqual(opts2.ignoreCase, false);
     assert.strictEqual(opts2.maxResults, undefined);
-    // Test accepted unique-key
     assert.strictEqual(parseAndValidateArgs(["node","cli.js","--query","x","--unique-key","fileLine"]).uniqueKey, 'fileLine');
-    // Test invalid unique-key
     let exited = false;
     const _exit = process.exit;
     process.exit = (code) => { exited = code; throw new Error("exit"); };
@@ -168,7 +154,6 @@ if (process.env.NODE_ENV === "test" || process.env.TEST_CLI_UNIQUE_SEARCH === "1
     } finally {
       process.exit = _exit;
     }
-    // Test invalid file-pattern
     exited = false;
     process.exit = (code) => { exited = code; throw new Error("exit"); };
     try {
@@ -178,7 +163,6 @@ if (process.env.NODE_ENV === "test" || process.env.TEST_CLI_UNIQUE_SEARCH === "1
     } finally {
       process.exit = _exit;
     }
-    // Test invalid max-results
     exited = false;
     process.exit = (code) => { exited = code; throw new Error("exit"); };
     try {
