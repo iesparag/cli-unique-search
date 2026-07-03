@@ -1,0 +1,19 @@
+{
+  "name": "cli-unique-search",
+  "version": "0.1.0",
+  "description": "A unique, configurable CLI tool for text search, filtering unique results across files and directories.",
+  "type": "module",
+  "bin": {
+    "unique-search": "./bin/cli.js"
+  },
+  "main": "./bin/cli.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "author": "iesparag",
+  "license": "MIT",
+  "dependencies": {
+    "minimist": "^1.2.8",
+    "glob": "^10.3.10"
+  }
+}
